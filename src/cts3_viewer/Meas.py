@@ -50,6 +50,7 @@ class BaseUnit(Enum):
     """Base measurements unit"""
     Time = auto()
     Frequency = auto()
+    Dimensionless = auto()
 
     def get_axis_label(self) -> str:
         """Gets horizontal axis label
@@ -61,6 +62,8 @@ class BaseUnit(Enum):
         """
         if self == BaseUnit.Time:
             return 'Time (s)'
+        if self == BaseUnit.Dimensionless:
+            return 'Samples'
         return 'Frequency (Hz)'
 
     def get_label(self) -> str:
@@ -73,6 +76,8 @@ class BaseUnit(Enum):
         """
         if self == BaseUnit.Time:
             return 's'
+        if self == BaseUnit.Dimensionless:
+            return ''
         return 'Hz'
 
 

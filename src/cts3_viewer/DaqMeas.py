@@ -110,8 +110,12 @@ def _load_signals(file_path: Path, verbose: bool) -> \
         sampling = float(cast(int, header.sampling))
         channels = cast(int, header.channels)
 
-    x = linspace(start_date, start_date + data_length / sampling,
-                 data_length, endpoint=True, dtype=float)
+    if sampling == 0:
+        x = linspace(1, data_length,
+                     data_length, endpoint=True, dtype=float)
+    else:
+        x = linspace(start_date, start_date + data_length / sampling,
+                     data_length, endpoint=True, dtype=float)
 
     if data_width == sizeof(c_int16):
         SOURCE_TXRX = 1
@@ -252,6 +256,8 @@ class DaqMeas(Meas):
         super().__init__(file_path)
         (self.x, self.y, self.y_unit,
             self.type, self.sampling) = _load_signals(file_path, verbose)
+        if self.sampling == 0:
+            self.x_unit = BaseUnit.Dimensionless
 
     def convert(self, html_file: Path) -> None:
         """Converts DAQ data to HTML
@@ -293,6 +299,8 @@ class DaqMeas(Meas):
             raise Exception('FFT cannot be performed on Vdc measurement')
         if self.type == MeasType.Demodulated:
             raise Exception('FFT cannot be performed on demodulated signal')
+        if self.sampling == 0:
+            raise Exception('FFT cannot be computed with external clock')
         self.file += ' (FFT)'
         self.type = MeasType.Power
         self.x_unit = BaseUnit.Frequency
