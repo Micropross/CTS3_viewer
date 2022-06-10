@@ -2,7 +2,8 @@
 from sys import exit
 from pathlib import Path
 from enum import Enum, auto, unique
-from typing import Union, Optional
+from typing import Optional
+from .Meas import Meas
 from .DaqMeas import DaqMeas
 from .AdvancedMeas import AdvancedMeas
 from .SpyMeas import SpyMeas
@@ -96,7 +97,7 @@ def viewer(source: Path, force: bool = False, fft: bool = False,
                 raise Exception(f"'{html}' already exists")
 
         type = find_file_type(source, verbose)
-        data: Union[DaqMeas, AdvancedMeas, SpyMeas]
+        data: Meas
         if type == FileType.DaqFile:
             data = DaqMeas(source, verbose)
         elif type == FileType.SpyFile:

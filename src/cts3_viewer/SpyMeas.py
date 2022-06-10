@@ -6,14 +6,14 @@ from .Meas import Meas, BaseUnit, MeasUnit, MeasType
 from ctypes import c_uint64, c_uint32, c_int32, c_uint16
 from ctypes import c_double, c_float, c_uint8, c_char
 from ctypes import sizeof, Structure
-from typing import cast, Tuple, Union, List
+from typing import cast, Union
 from numpy import linspace, fromfile, log10, absolute
 from numpy import dtype, int16, float64
 from numpy.fft import rfft, rfftfreq
 try:
     from numpy.typing import NDArray
 except ImportError:
-    NDArray = List  # type: ignore
+    NDArray = list  # type: ignore
 
 
 class _EventHeader(Structure):
@@ -59,7 +59,7 @@ class _BurstHeader(Structure):
 
 
 def _load_signal(file_path: Path, verbose: bool) -> \
-        Tuple[NDArray[float64],
+        tuple[NDArray[float64],
               Union[NDArray[float64], NDArray[int16]],
               MeasUnit, MeasType, float]:
     """Loads spy measurements signal from file

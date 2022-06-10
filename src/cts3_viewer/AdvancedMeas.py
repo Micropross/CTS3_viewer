@@ -4,12 +4,11 @@ from re import compile, search
 from plotly.graph_objs._figure import Figure  # type: ignore
 from plotly.graph_objs._scatter import Scatter  # type: ignore
 from .Meas import Meas, MeasUnit, MeasType
-from typing import Tuple, List
 from numpy import fromfile, dtype, float64
 try:
     from numpy.typing import NDArray
 except ImportError:
-    NDArray = List  # type: ignore
+    NDArray = list  # type: ignore
 
 
 @unique
@@ -45,7 +44,7 @@ class _Cursor():
 
 
 def _load_signal(file_path: Path) -> \
-        Tuple[NDArray[float64], NDArray[float64], List[_Cursor]]:
+        tuple[NDArray[float64], NDArray[float64], list[_Cursor]]:
     """Loads advanced measurements signal from file
 
     Parameters
@@ -60,7 +59,7 @@ def _load_signal(file_path: Path) -> \
         Vertical coordinates array
         List of cursors
     """
-    cursors: List[_Cursor] = []
+    cursors: list[_Cursor] = []
     with file_path.open('rb') as f:
         line = ''
         pattern = compile(r'#(\D)\d=(.*)')

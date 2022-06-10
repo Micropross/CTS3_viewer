@@ -5,7 +5,7 @@ from ctypes import sizeof, Structure
 from plotly.graph_objs._figure import Figure  # type: ignore
 from plotly.graph_objs._scatter import Scatter  # type: ignore
 from .Meas import Meas, BaseUnit, MeasUnit, MeasType
-from typing import cast, Tuple, List
+from typing import cast
 from math import sqrt
 from numpy import linspace, fromfile, log10, absolute
 from numpy import vectorize, dtype, int16, uint32, float64
@@ -13,7 +13,7 @@ from numpy.fft import rfft, rfftfreq
 try:
     from numpy.typing import NDArray
 except ImportError:
-    NDArray = List  # type: ignore
+    NDArray = list  # type: ignore
 
 
 class _ChannelConfig(Structure):
@@ -78,7 +78,7 @@ def _linear_calib(raw: NDArray[int16], offset: float,
 
 
 def _load_signals(file_path: Path, verbose: bool) -> \
-        Tuple[NDArray[float64], List[NDArray[float64]],
+        tuple[NDArray[float64], list[NDArray[float64]],
               MeasUnit, MeasType, float]:
     """Loads DAQ signals from file
 
