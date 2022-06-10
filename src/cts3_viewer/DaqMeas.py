@@ -111,11 +111,11 @@ def _load_signals(file_path: Path, verbose: bool) -> \
             print(f'Device: {header.device_id.decode("ascii")}')
             fw = cast(str, header.device_version.decode('ascii')).split()
             if len(fw) > 2:
+                print(f'Firmware: {fw[2]}')
                 if fw[0].lower() == 'fb':
                     print(f'DAQ: {fw[1]}')
                 else:
                     print(f'FPGA: {fw[1]}')
-                print(f'Firmware: {fw[2]}')
         data_width = int(header.bits_per_sample / 8)
         data_length = cast(int, header.measurements_count)
         start_date = 0.0
@@ -175,9 +175,11 @@ def _load_signals(file_path: Path, verbose: bool) -> \
                 if header.ch1.config & 1:
                     offset = cast(float, header.ch1.offset)
                     slope = cast(float, header.ch1.slope)
+                    probe = cast(str, header.probe_id_ch1.decode('ascii'))
                 else:
                     offset = cast(float, header.ch2.offset)
                     slope = cast(float, header.ch2.slope)
+                    probe = cast(str, header.probe_id_ch2.decode('ascii'))
                 if header.source == SOURCE_TXRX:
                     if verbose:
                         print('RF signal measurement on TX/RX (uncalibrated)')
@@ -191,10 +193,12 @@ def _load_signals(file_path: Path, verbose: bool) -> \
                         elif header.source == SOURCE_DAQ_CH2:
                             print('RF signal measurement on DAQ CH2')
                         else:
-                            print('RF signal measurement')
-                    probe = cast(str, header.probe_id_ch1.decode('ascii'))
-                    if len(probe):
-                        print(f'Probe: {probe}')
+                            if header.ch1.config & 1:
+                                print('RF signal measurement on DAQ CH1')
+                            else:
+                                print('RF signal measurement on DAQ CH2')
+                        if len(probe):
+                            print(f'Active probe: {probe}')
                     y_unit = MeasUnit.Volt
                     slope /= 1e3
                 return (x,
@@ -209,10 +213,10 @@ def _load_signals(file_path: Path, verbose: bool) -> \
                 print('RF signal dual measurement on DAQ')
                 probe = cast(str, header.probe_id_ch1.decode('ascii'))
                 if len(probe):
-                    print(f'Probe (CH1): {probe}')
+                    print(f'Active probe on CH1: {probe}')
                 probe = cast(str, header.probe_id_ch2.decode('ascii'))
                 if len(probe):
-                    print(f'Probe (CH2): {probe}')
+                    print(f'Active probe on CH2: {probe}')
             dt = dtype([('ch1', int16), ('ch2', int16)])
             data = fromfile(file_path, dt, data_length,
                             offset=sizeof(_Header))

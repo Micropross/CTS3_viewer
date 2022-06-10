@@ -106,14 +106,14 @@ def _load_signal(file_path: Path, verbose: bool) -> \
             print(f'Device: {burst_header.device_id.decode("ascii")}')
             fw = cast(str, burst_header.device_version.decode('ascii')).split()
             if len(fw) > 2:
+                print(f'Firmware: {fw[2]}')
                 if fw[0].lower() == 'fb':
                     print(f'DAQ: {fw[1]}')
                 else:
                     print(f'FPGA: {fw[1]}')
-                print(f'Firmware: {fw[2]}')
             probe = cast(str, burst_header.probe_id.decode('ascii'))
             if len(probe):
-                print(f'Probe: {probe}')
+                print(f'Active probe: {probe}')
         start_date = cast(int, burst_header.date) / 1e9
         sampling = cast(int, burst_header.sampling) * 1e3
         meas_offset = f.tell()
