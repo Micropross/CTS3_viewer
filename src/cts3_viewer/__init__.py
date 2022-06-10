@@ -11,7 +11,7 @@ from webbrowser import open
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 
-__version__ = '22.0.0'
+__version__ = '22.0.1'
 
 
 @unique
