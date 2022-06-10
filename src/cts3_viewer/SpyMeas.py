@@ -83,6 +83,8 @@ def _load_signal(file_path: Path, verbose: bool) -> \
     with file_path.open('rb') as f:
         evt_header = _EventHeader.from_buffer_copy(
             f.read(sizeof(_EventHeader)))
+        if verbose:
+            print(f'Protocol analyzer file version: {evt_header.version}')
         if evt_header.version < 2:
             raise Exception('Unsupported protocol analyzer file version '
                             f'({evt_header.version})')
@@ -92,12 +94,26 @@ def _load_signal(file_path: Path, verbose: bool) -> \
             f.read(sizeof(_BurstHeader)))
         if burst_header.type != 5:
             raise Exception('No analog measurements found')
+        if verbose:
+            print(f'Protocol analyzer analog version: {burst_header.version}')
         if burst_header.version < 3:
             raise Exception('Unsupported protocol analyzer analog version '
                             f'({burst_header.version})')
         data_length = cast(int, burst_header.events_number)
         if not data_length:
             raise Exception('No analog measurements found')
+        if verbose:
+            print(f'Device: {burst_header.device_id.decode("ascii")}')
+            fw = cast(str, burst_header.device_version.decode('ascii')).split()
+            if len(fw) > 2:
+                if fw[0].lower() == 'fb':
+                    print(f'DAQ: {fw[1]}')
+                else:
+                    print(f'FPGA: {fw[1]}')
+                print(f'Firmware: {fw[2]}')
+            probe = cast(str, burst_header.probe_id.decode('ascii'))
+            if len(probe):
+                print(f'Probe: {probe}')
         start_date = cast(int, burst_header.date) / 1e9
         sampling = cast(int, burst_header.sampling) * 1e3
         meas_offset = f.tell()
@@ -144,6 +160,11 @@ def _load_signal(file_path: Path, verbose: bool) -> \
             print('RF signal measurement on DAQ CH1')
         elif burst_header.source == SOURCE_DAQ_CH2:
             print('RF signal measurement on DAQ CH2')
+        impedance = cast(int, burst_header.impedance)
+        if impedance >= 1e6:
+            print(f'Input impedance: {int(impedance / 1e6)} MΩ')
+        else:
+            print(f'Input impedance: {impedance} Ω')
     return (x,
             data / 1e3,
             MeasUnit.Volt,

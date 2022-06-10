@@ -5,6 +5,7 @@ from ctypes import sizeof, Structure
 from plotly.graph_objs._figure import Figure  # type: ignore
 from plotly.graph_objs._scatter import Scatter  # type: ignore
 from .Meas import Meas, BaseUnit, MeasUnit, MeasType
+from datetime import datetime
 from typing import cast
 from math import sqrt
 from numpy import linspace, fromfile, log10, absolute
@@ -100,8 +101,21 @@ def _load_signals(file_path: Path, verbose: bool) -> \
     """
     with file_path.open('rb') as f:
         header = _Header.from_buffer_copy(f.read(sizeof(_Header)))
+        if verbose:
+            print(f'Acquisition file version: {header.version}')
         if header.version < 2:
-            raise Exception(f'Unsupported DAQ file version ({header.version})')
+            raise Exception('Unsupported acquisition file version '
+                            f'({header.version})')
+        if verbose:
+            print(f'Date: {datetime.fromtimestamp(header.timestamp)}')
+            print(f'Device: {header.device_id.decode("ascii")}')
+            fw = cast(str, header.device_version.decode('ascii')).split()
+            if len(fw) > 2:
+                if fw[0].lower() == 'fb':
+                    print(f'DAQ: {fw[1]}')
+                else:
+                    print(f'FPGA: {fw[1]}')
+                print(f'Firmware: {fw[2]}')
         data_width = int(header.bits_per_sample / 8)
         data_length = cast(int, header.measurements_count)
         start_date = 0.0
@@ -178,6 +192,9 @@ def _load_signals(file_path: Path, verbose: bool) -> \
                             print('RF signal measurement on DAQ CH2')
                         else:
                             print('RF signal measurement')
+                    probe = cast(str, header.probe_id_ch1.decode('ascii'))
+                    if len(probe):
+                        print(f'Probe: {probe}')
                     y_unit = MeasUnit.Volt
                     slope /= 1e3
                 return (x,
@@ -190,6 +207,12 @@ def _load_signals(file_path: Path, verbose: bool) -> \
             # Dual channel
             if verbose:
                 print('RF signal dual measurement on DAQ')
+                probe = cast(str, header.probe_id_ch1.decode('ascii'))
+                if len(probe):
+                    print(f'Probe (CH1): {probe}')
+                probe = cast(str, header.probe_id_ch2.decode('ascii'))
+                if len(probe):
+                    print(f'Probe (CH2): {probe}')
             dt = dtype([('ch1', int16), ('ch2', int16)])
             data = fromfile(file_path, dt, data_length,
                             offset=sizeof(_Header))
@@ -227,7 +250,7 @@ def _load_signals(file_path: Path, verbose: bool) -> \
                 sampling)
 
     else:
-        raise Exception('Invalid DAQ file format')
+        raise Exception('Invalid acquisition file format')
 
 
 class DaqMeas(Meas):

@@ -42,7 +42,7 @@ def find_file_type(file_path: Path, verbose: bool) -> FileType:
         id = f.read(4)
         if id == b'MPDQ':
             if verbose:
-                print(f"'{file_path}' detected as DAQ file")
+                print(f"'{file_path}' detected as acquisition file")
             return FileType.DaqFile
         if id == b'MPCS':
             if verbose:
