@@ -2,3 +2,4 @@
 /dist
 /src/cts3_viewer.egg-info
 /src/cts3_viewer/__pycache__
+/.vscode
