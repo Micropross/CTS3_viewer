@@ -10,17 +10,15 @@ from .SpyMeas import SpyMeas
 from webbrowser import open
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
-
-__version__ = "22.0.1"
-__author__ = 'NI'
-__copyright__ = f'Copyright 20{__version__[:2]}, NI'
+__version__ = '24.0.0'
+__author__ = 'FIME'
+__copyright__ = f'Copyright 20{__version__[:2]}, FIME'
 __license__ = 'MIT'
 
 
 @unique
 class FileType(Enum):
     """Analog file type"""
-
     Unknown = auto()
     DaqFile = auto()
     SpyFile = auto()
@@ -38,33 +36,31 @@ def _find_file_type(file_path: Path, verbose: bool) -> FileType:
     Returns:
         File type
     """
-    with file_path.open("rb") as f:
+    with file_path.open('rb') as f:
         id = f.read(4)
-        if id == b"MPDQ":
+        if id == b'MPDQ':
             if verbose:
                 print(f"'{file_path}' detected as acquisition file")
             return FileType.DaqFile
-        if id == b"MPCS":
+        if id == b'MPCS':
             if verbose:
                 print(f"'{file_path}' detected as protocol analyze file")
             return FileType.SpyFile
-        if id.startswith(b"#"):
+        if id.startswith(b'#'):
             if verbose:
                 print(f"'{file_path}' detected as advanced measurement file")
             return FileType.AdvancedFile
     if verbose:
-        print(f"Unknown identifier (0x{id.hex()})")
+        print(f'Unknown identifier (0x{id.hex()})')
     return FileType.Unknown
 
 
-def viewer(
-    source: Path,
-    force: bool = False,
-    fft: bool = False,
-    output: Optional[str] = None,
-    silent: bool = False,
-    verbose: bool = False,
-) -> int:
+def viewer(source: Path,
+           force: bool = False,
+           fft: bool = False,
+           output: Optional[str] = None,
+           silent: bool = False,
+           verbose: bool = False) -> int:
     """
     CTS3 Waveform viewer
 
@@ -83,9 +79,9 @@ def viewer(
         if output is None:
             if fft:
                 stem = source.stem
-                html = source.with_suffix(".html").with_stem(f"{stem}_fft")
+                html = source.with_suffix('.html').with_stem(f'{stem}_fft')
             else:
-                html = source.with_suffix(".html")
+                html = source.with_suffix('.html')
         else:
             html = Path(output)
         if html.exists():
@@ -120,43 +116,39 @@ def viewer(
 
 def main() -> None:
     """Runs CTS3 Waveform viewer"""
-    parser = ArgumentParser(
-        description="Analog waveform viewer for CTS3",
-        formatter_class=ArgumentDefaultsHelpFormatter,
-        prog="cts3-viewer",
-    )
-    parser.add_argument("src", type=str, help="analog file location")
-    parser.add_argument(
-        "-f", "--force", action="store_true", help="overwrite output file if exists"
-    )
-    parser.add_argument("--fft", action="store_true", help="compute signal FFT")
-    parser.add_argument("-o", "--output", type=str, help="select output HTML file")
-    parser.add_argument(
-        "-s",
-        "--silent",
-        action="store_true",
-        help="convert to HTML file without plotting the graph",
-    )
-    parser.add_argument("-v", "--verbose", action="store_true", help="increase verbosity")
-    parser.add_argument(
-        "--version",
-        action="version",
-        version=f"%(prog)s {__version__}",
-        help="show version information and exit",
-    )
+    parser = ArgumentParser(description='Analog waveform viewer for CTS3',
+                            formatter_class=ArgumentDefaultsHelpFormatter,
+                            prog='cts3-viewer')
+    parser.add_argument('src', type=str, help='analog file location')
+    parser.add_argument('-f',
+                        '--force',
+                        action='store_true',
+                        help='overwrite output file if exists')
+    parser.add_argument('--fft',
+                        action='store_true',
+                        help='compute signal FFT')
+    parser.add_argument('-o',
+                        '--output',
+                        type=str,
+                        help='select output HTML file')
+    parser.add_argument('-s',
+                        '--silent',
+                        action='store_true',
+                        help='convert to HTML file without plotting the graph')
+    parser.add_argument('-v',
+                        '--verbose',
+                        action='store_true',
+                        help='increase verbosity')
+    parser.add_argument('--version',
+                        action='version',
+                        version=f'%(prog)s {__version__}',
+                        help='show version information and exit')
     args = parser.parse_args()
     config = vars(args)
     exit(
-        viewer(
-            Path(config["src"]),
-            config["force"],
-            config["fft"],
-            config["output"],
-            config["silent"],
-            config["verbose"],
-        )
-    )
+        viewer(Path(config['src']), config['force'], config['fft'],
+               config['output'], config['silent'], config['verbose']))
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

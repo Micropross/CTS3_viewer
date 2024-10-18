@@ -7,7 +7,6 @@ from plotly.graph_objs._figure import Figure  # type: ignore
 @unique
 class MeasUnit(Enum):
     """Measurements unit"""
-
     Degree = auto()
     Volt = auto()
     Dimensionless = auto()
@@ -21,12 +20,12 @@ class MeasUnit(Enum):
             Axis label
         """
         if self == MeasUnit.Degree:
-            return "Phase (°)"
+            return 'Phase (°)'
         if self == MeasUnit.Volt:
-            return "Voltage (V)"
+            return 'Voltage (V)'
         if self == MeasUnit.dBc:
-            return "Power (dBc)"
-        return "Voltage"
+            return 'Power (dBc)'
+        return 'Voltage'
 
     def get_label(self) -> str:
         """
@@ -36,18 +35,17 @@ class MeasUnit(Enum):
             Unit label
         """
         if self == MeasUnit.Degree:
-            return "°"
+            return '°'
         if self == MeasUnit.Volt:
-            return "V"
+            return 'V'
         if self == MeasUnit.dBc:
-            return "dBc"
-        return ""
+            return 'dBc'
+        return ''
 
 
 @unique
 class BaseUnit(Enum):
     """Base measurements unit"""
-
     Time = auto()
     Frequency = auto()
     Dimensionless = auto()
@@ -60,10 +58,10 @@ class BaseUnit(Enum):
             Axis label
         """
         if self == BaseUnit.Time:
-            return "Time (s)"
+            return 'Time (s)'
         if self == BaseUnit.Dimensionless:
-            return "Samples"
-        return "Frequency (Hz)"
+            return 'Samples'
+        return 'Frequency (Hz)'
 
     def get_label(self) -> str:
         """
@@ -73,16 +71,15 @@ class BaseUnit(Enum):
             Unit label
         """
         if self == BaseUnit.Time:
-            return "s"
+            return 's'
         if self == BaseUnit.Dimensionless:
-            return ""
-        return "Hz"
+            return ''
+        return 'Hz'
 
 
 @unique
 class MeasType(Enum):
     """Measurements type"""
-
     Modulated = auto()
     Demodulated = auto()
     Phase = auto()
@@ -133,7 +130,8 @@ class Meas(ABC):
         """
         ...
 
-    def _plot(self, fig: Figure, html_file: Path) -> None:  # type: ignore[no-any-unimported]
+    def _plot(self, fig: Figure,
+              html_file: Path) -> None:  # type: ignore[no-any-unimported]
         """
         Configures and saves plot to HTML file
 
@@ -144,9 +142,9 @@ class Meas(ABC):
         fig.update_layout(title=self.file)
         fig.update_xaxes(title_text=self.x_unit.get_axis_label())
         fig.update_yaxes(title_text=self.y_unit.get_axis_label())
-        fig.update_layout(hovermode="x")
+        fig.update_layout(hovermode='x')
         configuration = {
-            "modeBarButtonsToAdd": ["drawline", "drawrect", "drawopenpath"],
-            "displaylogo": False,
+            'modeBarButtonsToAdd': ['drawline', 'drawrect', 'drawopenpath'],
+            'displaylogo': False
         }
         fig.write_html(html_file, config=configuration, auto_play=False)
