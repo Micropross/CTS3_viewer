@@ -1,6 +1,84 @@
 [build-system]
 requires = [
-    "setuptools>=58.1",
-    "wheel>=0.37"
+    "setuptools>=61.2"
 ]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "cts3-viewer"
+description = "CTS3 Waveform Viewer"
+keywords = [
+    "NI",
+    "FIME",
+    "CTS3",
+    "NFC"
+]
+authors = [
+    { name = "Julien Vannier", email = "julien.m.vannier@gmail.com" }
+]
+maintainers = [
+    { name = "Guillaume Fouilleul", email = "guillaume.fouilleul@gmail.com" }
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Visualization"
+]
+requires-python = ">=3.9"
+dependencies = [
+    "numpy>=1.21",
+    "plotly>=4.0"
+]
+dynamic = [
+    "version"
+]
+
+[project.readme]
+file = "README.rst"
+content-type = "text/x-rst"
+
+[project.license]
+text = "MIT"
+
+[project.urls]
+Homepage = "https://www.fime.com/shop/product/contactless-test-station-cts-iii-41"
+Download = "https://pypi.org/project/cts3-viewer"
+Code = "https://github.com/Micropross/CTS3_viewer"
+
+[project.scripts]
+cts3-viewer = "cts3_viewer:main"
+
+[tool.setuptools]
+platforms = [
+    "any"
+]
+license-files = [
+    "LICENSE"
+]
+include-package-data = false
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = [
+    "src"
+]
+namespaces = false
+
+[tool.setuptools.dynamic.version]
+attr = "cts3_viewer.__version__"
