@@ -1,15 +1,14 @@
 from pathlib import Path
-from ctypes import c_uint64, c_uint32, c_int32, c_uint16, c_int16
-from ctypes import c_double, c_float, c_uint8, c_char
-from ctypes import sizeof, Structure
+from ctypes import (c_uint8, c_char, c_double, c_float, c_int16, c_int32,
+                    c_uint16, c_uint32, c_uint64, Structure, sizeof)
 from plotly.graph_objs._figure import Figure  # type: ignore
 from plotly.graph_objs._scatter import Scatter  # type: ignore
-from .Meas import Meas, BaseUnit, MeasUnit, MeasType
+from .Meas import BaseUnit, Meas, MeasType, MeasUnit
 from datetime import datetime
 from typing import cast
 from math import sqrt
-from numpy import linspace, fromfile, log10, absolute
-from numpy import vectorize, dtype, int16, uint32, float64
+from numpy import (absolute, float64, int16, isnan, log10, uint32, dtype,
+                   vectorize, concatenate, empty, frombuffer, full, linspace)
 from numpy.fft import rfft, rfftfreq
 from numpy.typing import NDArray
 
@@ -54,6 +53,15 @@ class _Header(Structure):
                 ('rfu2', c_uint8 * 52)]  # yapf: disable
 
 
+class _Footer(Structure):
+    """Acquisition file footer"""
+    _pack_ = 1
+    _fields_ = [('id', c_uint32),
+                ('version', c_uint16),
+                ('footer_size', c_uint16),
+                ('metadata_size', c_uint16)]  # yapf: disable
+
+
 def _linear_calib(raw: NDArray[int16], offset: float,
                   slope: float) -> NDArray[float64]:
     """
@@ -89,143 +97,220 @@ def _load_signals(
         - Measurement type
         - Sampling rate
     """
+    NAN_POINT = full(1, float('nan'), float64)
     with file_path.open('rb') as f:
-        header = _Header.from_buffer_copy(f.read(sizeof(_Header)))
-        if verbose:
-            print(f'Acquisition file version: {header.version}')
-        if header.version < 2:
-            raise Exception(
-                f'Unsupported acquisition file version ({header.version})')
-        if verbose:
-            print(f'Date: {datetime.fromtimestamp(header.timestamp)}')
-            print(f'Device: {header.device_id.decode("ascii")}')
-            fw = cast(str, header.device_version.decode('ascii')).split()
-            if len(fw) > 2:
-                print(f'Firmware: {fw[2]}')
-                if fw[0].lower() == 'fb':
-                    print(f'DAQ: {fw[1]}')
-                else:
-                    print(f'FPGA: {fw[1]}')
-        data_width = int(header.bits_per_sample / 8)
-        data_length = cast(int, header.measurements_count)
+        x = empty(0, float64)
+        y1 = empty(0, float64)
+        y2 = empty(0, float64)
+        unit = MeasUnit.Volt
+        type = MeasType.Modulated
+        sampling = 0.0
         start_date = 0.0
-        if header.version > 2:
-            start_date = cast(int, header.delay) / 1e9
-        sampling = float(cast(int, header.sampling))
-        channels = cast(int, header.channels)
 
-    if sampling == 0:
-        x = linspace(1, data_length, data_length, endpoint=True, dtype=float)
-    else:
-        x = linspace(start_date,
-                     start_date + data_length / sampling,
-                     data_length,
-                     endpoint=True,
-                     dtype=float)
-
-    if data_width == sizeof(c_int16):
-        SOURCE_TXRX = 1
-        SOURCE_ANALOG_IN = 2
-        SOURCE_DAQ_CH1 = 3
-        SOURCE_DAQ_CH2 = 4
-        SOURCE_VDC = 5
-        SOURCE_PHASE = 6
-        if channels == 1:
-            y = fromfile(file_path, int16, data_length, offset=sizeof(_Header))
-            if header.source == SOURCE_PHASE:
-                # Phase
-                if verbose:
-                    print('Phase measurement')
-                calib = vectorize(lambda raw: float('nan')
-                                  if raw > 8192 else 180.0 * raw / 8192.0)
-                return (x, [calib(y)], MeasUnit.Degree, MeasType.Phase,
-                        sampling)
-            elif header.source == SOURCE_VDC:
-                # Vdc
-                if verbose:
-                    print('Vdc measurement')
-                offset = cast(float, header.ch1.offset)
-                slope = cast(float, header.ch1.slope)
-                quadratic = cast(float, header.ch1.rms_noise)
-                cubic = cast(float, header.ch1.demod_noise)
-                calib = vectorize(lambda raw:
-                                  (offset + slope * raw + quadratic * raw**2 +
-                                   cubic * raw**3) / 1e3)
-                return (x, [calib(y)], MeasUnit.Volt, MeasType.Vdc, sampling)
-            else:
-                # Modulated signal
-                if header.ch1.config & 1:
-                    offset = cast(float, header.ch1.offset)
-                    slope = cast(float, header.ch1.slope)
-                    probe = cast(str, header.probe_id_ch1.decode('ascii'))
-                else:
-                    offset = cast(float, header.ch2.offset)
-                    slope = cast(float, header.ch2.slope)
-                    probe = cast(str, header.probe_id_ch2.decode('ascii'))
-                if header.source == SOURCE_TXRX:
-                    if verbose:
-                        print('RF signal measurement on TX/RX (uncalibrated)')
-                    y_unit = MeasUnit.Dimensionless
-                else:
-                    if verbose:
-                        if header.source == SOURCE_ANALOG_IN:
-                            print('RF signal measurement on ANALOG IN')
-                        elif header.source == SOURCE_DAQ_CH1:
-                            print('RF signal measurement on DAQ CH1')
-                        elif header.source == SOURCE_DAQ_CH2:
-                            print('RF signal measurement on DAQ CH2')
-                        else:
-                            if header.ch1.config & 1:
-                                print('RF signal measurement on DAQ CH1')
-                            else:
-                                print('RF signal measurement on DAQ CH2')
-                        if len(probe):
-                            print(f'Active probe: {probe}')
-                    y_unit = MeasUnit.Volt
-                    slope /= 1e3
-                return (x, [_linear_calib(y, offset, slope)], y_unit,
-                        MeasType.Modulated, sampling)
-
-        else:
-            # Dual channel
+        while True:
+            buffer = f.read(sizeof(_Header))
+            if len(buffer) != sizeof(_Header):
+                if len(buffer) > 0:
+                    print('Unexpected end of file')
+                break
+            header = _Header.from_buffer_copy(buffer)
             if verbose:
-                print('RF signal dual measurement on DAQ')
-                probe = cast(str, header.probe_id_ch1.decode('ascii'))
-                if len(probe):
-                    print(f'Active probe on CH1: {probe}')
-                probe = cast(str, header.probe_id_ch2.decode('ascii'))
-                if len(probe):
-                    print(f'Active probe on CH2: {probe}')
-            dt = dtype([('ch1', int16), ('ch2', int16)])
-            data = fromfile(file_path, dt, data_length, offset=sizeof(_Header))
-            offset_1 = cast(float, header.ch1.offset)
-            slope_1 = cast(float, header.ch1.slope) / 1e3
-            offset_2 = cast(float, header.ch2.offset)
-            slope_2 = cast(float, header.ch2.slope) / 1e3
-            return (x, [
-                _linear_calib(data['ch1'], offset_1, slope_1),
-                _linear_calib(data['ch2'], offset_2, slope_2)
-            ], MeasUnit.Volt, MeasType.Modulated, sampling)
+                print(f'Acquisition file version: {header.version}')
+            if header.version < 2:
+                raise Exception(
+                    f'Unsupported acquisition file version ({header.version})')
+            if verbose:
+                print(f'Date: {datetime.fromtimestamp(header.timestamp)}')
+                print(f'Device: {header.device_id.decode("ascii")}')
+                fw = cast(str, header.device_version.decode('ascii')).split()
+                if len(fw) > 2:
+                    print(f'Firmware: {fw[2]}')
+                    if fw[0].lower() == 'fb':
+                        print(f'DAQ: {fw[1]}')
+                    else:
+                        print(f'FPGA: {fw[1]}')
+            data_width = int(header.bits_per_sample / 8)
+            data_length = cast(int, header.measurements_count)
+            if data_length == 0:
+                break
+            sampling = float(cast(int, header.sampling))
+            if header.version > 2:
+                if sampling == 0.0:
+                    start_date += cast(int, header.delay)
+                else:
+                    start_date += cast(int, header.delay) / 1e9
+            channels = cast(int, header.channels)
 
-    elif data_width == sizeof(c_uint32):
-        y = fromfile(file_path, uint32, data_length, offset=sizeof(_Header))
+            if sampling == 0.0:
+                x = concatenate((x,
+                                 linspace(1,
+                                          data_length + 1,
+                                          data_length + 1,
+                                          endpoint=True,
+                                          dtype=float64)))
+                start_date += data_length + 2
+                if header.version > 2:
+                    start_date -= cast(int, header.delay)
+            else:
+                x = concatenate(
+                    (x,
+                     linspace(start_date,
+                              start_date + (data_length + 1) / sampling,
+                              data_length + 1,
+                              endpoint=True,
+                              dtype=float64)))
+                start_date += (data_length + 2) / sampling
+                if header.version > 2:
+                    start_date -= cast(int, header.delay) / 1e9
 
-        # Demodulated signal
-        if verbose:
-            print('RF demodulated signal measurement')
-        if header.ch1.config & 1:
-            slope = cast(float, header.ch1.slope)
-            noise = cast(float, header.ch1.demod_noise)
+            if data_width == sizeof(c_int16):
+                SOURCE_TXRX = 1
+                SOURCE_ANALOG_IN = 2
+                SOURCE_DAQ_CH1 = 3
+                SOURCE_DAQ_CH2 = 4
+                SOURCE_VDC = 5
+                SOURCE_PHASE = 6
+                if channels == 1:
+                    buffer = f.read(data_length * sizeof(c_int16))
+                    if len(buffer) != data_length * sizeof(c_int16):
+                        print('Unexpected end of file')
+                        break
+                    y_raw = frombuffer(buffer, int16, data_length)
+                    if header.source == SOURCE_PHASE:
+                        # Phase
+                        if verbose:
+                            print('Phase measurement')
+                        calib = vectorize(lambda raw: float('nan') if raw >
+                                          8192 else 180.0 * raw / 8192.0)
+                        y1 = concatenate((y1, calib(y_raw), NAN_POINT))
+                        unit = MeasUnit.Degree
+                        type = MeasType.Phase
+                    elif header.source == SOURCE_VDC:
+                        # Vdc
+                        if verbose:
+                            print('Vdc measurement')
+                        offset = cast(float, header.ch1.offset)
+                        slope = cast(float, header.ch1.slope)
+                        quadratic = cast(float, header.ch1.rms_noise)
+                        cubic = cast(float, header.ch1.demod_noise)
+                        calib = vectorize(lambda raw: (offset + (slope * raw) +
+                                                       (quadratic * raw**2) +
+                                                       (cubic * raw**3)) / 1e3)
+                        y1 = concatenate((y1, calib(y_raw), NAN_POINT))
+                        unit = MeasUnit.Volt
+                        type = MeasType.Vdc
+                    else:
+                        # Modulated signal
+                        if header.ch1.config & 1:
+                            offset = cast(float, header.ch1.offset)
+                            slope = cast(float, header.ch1.slope)
+                            probe = cast(str,
+                                         header.probe_id_ch1.decode('ascii'))
+                        else:
+                            offset = cast(float, header.ch2.offset)
+                            slope = cast(float, header.ch2.slope)
+                            probe = cast(str,
+                                         header.probe_id_ch2.decode('ascii'))
+                        if header.source == SOURCE_TXRX:
+                            if verbose:
+                                print('RF signal measurement '
+                                      'on TX/RX (uncalibrated)')
+                            y_unit = MeasUnit.Dimensionless
+                        else:
+                            if verbose:
+                                if header.source == SOURCE_ANALOG_IN:
+                                    print('RF signal measurement on ANALOG IN')
+                                elif header.source == SOURCE_DAQ_CH1:
+                                    print('RF signal measurement on DAQ CH1')
+                                elif header.source == SOURCE_DAQ_CH2:
+                                    print('RF signal measurement on DAQ CH2')
+                                else:
+                                    if header.ch1.config & 1:
+                                        print('RF signal measurement '
+                                              'on DAQ CH1')
+                                    else:
+                                        print('RF signal measurement '
+                                              'on DAQ CH2')
+                                if len(probe):
+                                    print(f'Active probe: {probe}')
+                            y_unit = MeasUnit.Volt
+                            slope /= 1e3
+                        y1 = concatenate(
+                            (y1, _linear_calib(y_raw, offset,
+                                               slope), NAN_POINT))
+                        unit = y_unit
+                        type = MeasType.Modulated
+
+                else:
+                    # Dual channel
+                    if verbose:
+                        print('RF signal dual measurement on DAQ')
+                        probe = cast(str, header.probe_id_ch1.decode('ascii'))
+                        if len(probe):
+                            print(f'Active probe on CH1: {probe}')
+                        probe = cast(str, header.probe_id_ch2.decode('ascii'))
+                        if len(probe):
+                            print(f'Active probe on CH2: {probe}')
+                    dt = dtype([('ch1', int16), ('ch2', int16)])
+                    buffer = f.read(data_length * sizeof(c_int16) * 2)
+                    if len(buffer) != data_length * sizeof(c_int16) * 2:
+                        print('Unexpected end of file')
+                        break
+                    data = frombuffer(buffer, dt, data_length)
+                    offset_1 = cast(float, header.ch1.offset)
+                    slope_1 = cast(float, header.ch1.slope) / 1e3
+                    offset_2 = cast(float, header.ch2.offset)
+                    slope_2 = cast(float, header.ch2.slope) / 1e3
+                    y1 = concatenate(
+                        (y1, _linear_calib(data['ch1'], offset_1,
+                                           slope_1), NAN_POINT))
+                    y2 = concatenate(
+                        (y2, _linear_calib(data['ch2'], offset_2,
+                                           slope_2), NAN_POINT))
+                    unit = MeasUnit.Volt
+                    type = MeasType.Modulated
+
+            elif data_width == sizeof(c_uint32):
+                buffer = f.read(data_length * sizeof(c_uint32))
+                if len(buffer) != data_length * sizeof(c_uint32):
+                    print('Unexpected end of file')
+                    break
+                y_raw = frombuffer(buffer, uint32, data_length)
+
+                # Demodulated signal
+                if verbose:
+                    print('RF demodulated signal measurement')
+                if header.ch1.config & 1:
+                    slope = cast(float, header.ch1.slope)
+                    noise = cast(float, header.ch1.demod_noise)
+                else:
+                    slope = cast(float, header.ch2.slope)
+                    noise = cast(float, header.ch2.demod_noise)
+                slope *= cast(float, header.normalization) / 1e3
+                calib = vectorize(lambda raw: slope * sqrt(raw - noise)
+                                  if raw > noise else 0.0)
+                y1 = concatenate((y1, calib(y_raw), NAN_POINT))
+                unit = MeasUnit.Volt
+                type = MeasType.Demodulated
+
+            else:
+                raise Exception('Invalid acquisition file format')
+
+            # Read footer
+            buffer = f.read(sizeof(_Footer))
+            if len(buffer) != sizeof(_Footer):
+                print('Unexpected end of file')
+                break
+            footer = _Footer.from_buffer_copy(buffer)
+            metadata_len = int(footer.metadata_size)
+            if metadata_len:
+                f.read(metadata_len)
+            continue
+
+        if y2.size > 0:
+            return (x, [y1, y2], unit, type, sampling)
         else:
-            slope = cast(float, header.ch2.slope)
-            noise = cast(float, header.ch2.demod_noise)
-        slope *= cast(float, header.normalization) / 1e3
-        calib = vectorize(lambda raw: slope * sqrt(raw - noise)
-                          if raw > noise else 0.0)
-        return (x, [calib(y)], MeasUnit.Volt, MeasType.Demodulated, sampling)
-
-    else:
-        raise Exception('Invalid acquisition file format')
+            return (x, [y1], unit, type, sampling)
 
 
 class DaqMeas(Meas):
@@ -233,6 +318,10 @@ class DaqMeas(Meas):
     DAQ measurements
 
     Attributes:
+        file: File path
+        y_unit: Vertical axis unit
+        x_unit: Horizontal axis unit
+        type: Measurement type
         x: Horizontal coordinates array
         y: List of vertical coordinates arrays
         sampling: Sampling rate
@@ -265,11 +354,11 @@ class DaqMeas(Meas):
         for line in self.y:
             fig.add_trace(Scatter(x=self.x, y=line, mode='lines'))
             if multichannel:
-                fig.data[count].name = f'CH{count+1}'  # type: ignore
+                fig.data[count].name = f'CH{count+1}'
                 hover_header = f'CH{count+1}<br>'
             else:
                 hover_header = ''
-            fig.data[count].hovertemplate = (  # type: ignore
+            fig.data[count].hovertemplate = (
                 f'{hover_header}'
                 f'date=%{{x}}{self.x_unit.get_label()}<br>'
                 f'value=%{{y}}{self.y_unit.get_label()}<extra></extra>')
@@ -300,16 +389,18 @@ class DaqMeas(Meas):
         count = 0
         multichannel = len(self.y) > 1
         for line in self.y:
+            if isnan(line).any():
+                raise Exception('FFT cannot be performed on multi-signals')
             signal = absolute(rfft(line))
             normalized_fft = 20 * log10(signal / signal.max())
             freq = rfftfreq(self.x.size, 1 / self.sampling)
             fig.add_trace(Scatter(x=freq, y=normalized_fft, mode='lines'))
             if multichannel:
-                fig.data[count].name = f'CH{count+1}'  # type: ignore
+                fig.data[count].name = f'CH{count+1}'
                 hover_header = f'CH{count+1}<br>'
             else:
                 hover_header = ''
-            fig.data[count].hovertemplate = (  # type: ignore
+            fig.data[count].hovertemplate = (
                 f'{hover_header}'
                 f'frequency=%{{x}}{self.x_unit.get_label()}<br>'
                 f'value=%{{y}}{self.y_unit.get_label()}<extra></extra>')

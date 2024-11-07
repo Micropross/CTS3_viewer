@@ -1,5 +1,5 @@
 from pathlib import Path
-from enum import Enum, auto, unique
+from enum import auto, Enum, unique
 from abc import ABC, abstractmethod
 from plotly.graph_objs._figure import Figure  # type: ignore
 
@@ -130,8 +130,7 @@ class Meas(ABC):
         """
         ...
 
-    def _plot(self, fig: Figure,
-              html_file: Path) -> None:  # type: ignore[no-any-unimported]
+    def _plot(self, fig: Figure, html_file: Path) -> None:
         """
         Configures and saves plot to HTML file
 

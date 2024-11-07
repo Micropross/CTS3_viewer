@@ -1,12 +1,11 @@
 #!/usr/bin/python3
-import sys
+from sys import modules, path
 from pathlib import Path
 
-name = sys.modules[__name__].__file__
+name = modules[__name__].__file__
 if name:
-    path = str(Path(name).parent.joinpath('..'))
-    sys.path.insert(0, path)
+    path.insert(0, str(Path(name).parent.joinpath('..')))
 
-from cts3_viewer import main  # noqa: E402
+from cts3_viewer import main
 
 main()

@@ -1,16 +1,16 @@
 #!/usr/bin/python3
 from sys import exit
 from pathlib import Path
-from enum import Enum, auto, unique
-from typing import Optional
+from enum import auto, Enum, unique
+from typing import Optional, cast
 from .Meas import Meas
 from .DaqMeas import DaqMeas
 from .AdvancedMeas import AdvancedMeas
 from .SpyMeas import SpyMeas
 from webbrowser import open
-from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+from argparse import ArgumentDefaultsHelpFormatter, ArgumentParser
 
-__version__ = '24.0.0'
+__version__ = '24.1.0'
 __author__ = 'FIME'
 __copyright__ = f'Copyright 20{__version__[:2]}, FIME'
 __license__ = 'MIT'
@@ -146,8 +146,9 @@ def main() -> None:
     args = parser.parse_args()
     config = vars(args)
     exit(
-        viewer(Path(config['src']), config['force'], config['fft'],
-               config['output'], config['silent'], config['verbose']))
+        viewer(Path(cast(str, config['src']).strip('"')), config['force'],
+               config['fft'], config['output'], config['silent'],
+               config['verbose']))
 
 
 if __name__ == '__main__':

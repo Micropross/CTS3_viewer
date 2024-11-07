@@ -3,8 +3,8 @@ from enum import Enum, auto, unique
 from re import compile, search
 from plotly.graph_objs._figure import Figure  # type: ignore
 from plotly.graph_objs._scatter import Scatter  # type: ignore
-from .Meas import Meas, MeasUnit, MeasType
-from numpy import fromfile, dtype, float64
+from .Meas import Meas, MeasType, MeasUnit
+from numpy import float64, dtype, fromfile
 from numpy.typing import NDArray
 
 
@@ -82,6 +82,10 @@ class AdvancedMeas(Meas):
     Advanced measurements
 
     Attributes:
+        file: File path
+        y_unit: Vertical axis unit
+        x_unit: Horizontal axis unit
+        type: Measurement type
         x: Horizontal coordinates array
         y: Vertical coordinates array
         cursors: List of cursors
@@ -108,7 +112,7 @@ class AdvancedMeas(Meas):
         """
         fig = Figure()
         fig.add_trace(Scatter(x=self.x, y=self.y, mode='lines'))
-        fig.data[0].hovertemplate = (  # type: ignore
+        fig.data[0].hovertemplate = (
             f'date=%{{x}}{self.x_unit.get_label()}<br>'
             f'value=%{{y}}{self.y_unit.get_label()}<extra></extra>')
         for cursor in self.cursors:

@@ -2,13 +2,11 @@ from pathlib import Path
 from os import SEEK_CUR
 from plotly.graph_objs._figure import Figure  # type: ignore
 from plotly.graph_objs._scatter import Scatter  # type: ignore
-from .Meas import Meas, BaseUnit, MeasUnit, MeasType
-from ctypes import c_uint64, c_uint32, c_int32, c_uint16
-from ctypes import c_double, c_float, c_uint8, c_char
-from ctypes import sizeof, Structure
-from typing import cast, Union
-from numpy import linspace, fromfile, log10, absolute
-from numpy import dtype, int16, float64
+from .Meas import BaseUnit, Meas, MeasType, MeasUnit
+from ctypes import (c_uint8, c_char, c_double, c_float, c_int32, c_uint16,
+                    c_uint32, c_uint64, Structure, sizeof)
+from typing import Union, cast
+from numpy import absolute, float64, int16, log10, dtype, frombuffer, linspace
 from numpy.fft import rfft, rfftfreq
 from numpy.typing import NDArray
 
@@ -77,8 +75,10 @@ def _load_signal(
         - Sampling rate
     """
     with file_path.open('rb') as f:
-        evt_header = _EventHeader.from_buffer_copy(f.read(
-            sizeof(_EventHeader)))
+        buffer = f.read(sizeof(_EventHeader))
+        if len(buffer) != sizeof(_EventHeader):
+            raise Exception('Invalid protocol analyzer file format')
+        evt_header = _EventHeader.from_buffer_copy(buffer)
         if verbose:
             print(f'Protocol analyzer file version: {evt_header.version}')
         if evt_header.version < 2:
@@ -112,14 +112,16 @@ def _load_signal(
                 print(f'Active probe: {probe}')
         start_date = cast(int, burst_header.date) / 1e9
         sampling = cast(int, burst_header.sampling) * 1e3
-        meas_offset = f.tell()
 
     x = linspace(start_date,
                  start_date + data_length / sampling,
                  data_length,
                  endpoint=True,
-                 dtype=float)
-    data = fromfile(file_path, dtype('>i2'), data_length, offset=meas_offset)
+                 dtype=float64)
+    buffer = f.read(data_length * sizeof(c_uint16))
+    if len(buffer) != data_length * sizeof(c_uint16):
+        raise Exception('Invalid analog measurements file format')
+    data = frombuffer(buffer, dtype('>i2'), data_length)
 
     SOURCE_TXRX = 1
     SOURCE_ANALOG_IN = 2
@@ -164,6 +166,10 @@ class SpyMeas(Meas):
     Spy measurements
 
     Attributes:
+        file: File path
+        y_unit: Vertical axis unit
+        x_unit: Horizontal axis unit
+        type: Measurement type
         x: Horizontal coordinates array
         y: Vertical coordinates array
         sampling: Sampling rate
@@ -190,7 +196,7 @@ class SpyMeas(Meas):
         """
         fig = Figure()
         fig.add_trace(Scatter(x=self.x, y=self.y, mode='lines'))
-        fig.data[0].hovertemplate = (  # type: ignore
+        fig.data[0].hovertemplate = (
             f'date=%{{x}}{self.x_unit.get_label()}<br>'
             f'value=%{{y}}{self.y_unit.get_label()}<extra></extra>')
         fig.add_hline(y=0)
@@ -218,7 +224,7 @@ class SpyMeas(Meas):
         freq = rfftfreq(self.x.size, 1 / self.sampling)
         fig = Figure()
         fig.add_trace(Scatter(x=freq, y=normalized_fft, mode='lines'))
-        fig.data[0].hovertemplate = (  # type: ignore
+        fig.data[0].hovertemplate = (
             f'frequency=%{{x}}{self.x_unit.get_label()}<br>'
             f'value=%{{y}}{self.y_unit.get_label()}<extra></extra>')
         x_max = freq[signal.argmax()]
