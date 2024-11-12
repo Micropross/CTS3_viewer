@@ -62,26 +62,10 @@ class _Footer(Structure):
                 ('metadata_size', c_uint16)]  # yapf: disable
 
 
-def _linear_calib(raw: NDArray[int16], offset: float,
-                  slope: float) -> NDArray[float64]:
-    """
-    Performs linear calibration
-
-    Args:
-        raw: Values to calibrate
-        offset: Calibration offset
-        slope: Calibration slope
-
-    Returns:
-        Calibrated values
-    """
-    return slope * (raw + offset)
-
-
 def _load_signals(
     file_path: Path, verbose: bool
-) -> tuple[NDArray[float64], list[NDArray[float64]], MeasUnit, MeasType,
-           float]:
+) -> tuple[NDArray[float64], list[NDArray[float64]], MeasUnit, MeasType, float,
+           list[float]]:
     """
     Loads DAQ signals from file
 
@@ -96,6 +80,7 @@ def _load_signals(
         - Vertical axis unit
         - Measurement type
         - Sampling rate
+        - List of vertical lines
     """
     NAN_POINT = full(1, float('nan'), float64)
     with file_path.open('rb') as f:
@@ -104,6 +89,7 @@ def _load_signals(
         y2 = empty(0, float64)
         unit = MeasUnit.Volt
         type = MeasType.Modulated
+        separators: list[float] = []
         sampling = 0.0
         start_date = 0.0
 
@@ -139,7 +125,11 @@ def _load_signals(
                     start_date += cast(int, header.delay)
                 else:
                     start_date += cast(int, header.delay) / 1e9
-            channels = cast(int, header.channels)
+            if len(y1) > 0:
+                separators.append(start_date)
+                y1 = concatenate((y1, NAN_POINT))
+                if len(y2) > 0:
+                    y2 = concatenate((y1, NAN_POINT))
 
             if sampling == 0.0:
                 x = concatenate((x,
@@ -170,6 +160,7 @@ def _load_signals(
                 SOURCE_DAQ_CH2 = 4
                 SOURCE_VDC = 5
                 SOURCE_PHASE = 6
+                channels = cast(int, header.channels)
                 if channels == 1:
                     buffer = f.read(data_length * sizeof(c_int16))
                     if len(buffer) != data_length * sizeof(c_int16):
@@ -182,7 +173,7 @@ def _load_signals(
                             print('Phase measurement')
                         calib = vectorize(lambda raw: float('nan') if raw >
                                           8192 else 180.0 * raw / 8192.0)
-                        y1 = concatenate((y1, calib(y_raw), NAN_POINT))
+                        y1 = concatenate((y1, calib(y_raw)))
                         unit = MeasUnit.Degree
                         type = MeasType.Phase
                     elif header.source == SOURCE_VDC:
@@ -196,7 +187,7 @@ def _load_signals(
                         calib = vectorize(lambda raw: (offset + (slope * raw) +
                                                        (quadratic * raw**2) +
                                                        (cubic * raw**3)) / 1e3)
-                        y1 = concatenate((y1, calib(y_raw), NAN_POINT))
+                        y1 = concatenate((y1, calib(y_raw)))
                         unit = MeasUnit.Volt
                         type = MeasType.Vdc
                     else:
@@ -235,9 +226,8 @@ def _load_signals(
                                     print(f'Active probe: {probe}')
                             y_unit = MeasUnit.Volt
                             slope /= 1e3
-                        y1 = concatenate(
-                            (y1, _linear_calib(y_raw, offset,
-                                               slope), NAN_POINT))
+                        calib = vectorize(lambda raw: slope * (raw + offset))
+                        y1 = concatenate((y1, calib(y_raw)))
                         unit = y_unit
                         type = MeasType.Modulated
 
@@ -251,22 +241,21 @@ def _load_signals(
                         probe = cast(str, header.probe_id_ch2.decode('ascii'))
                         if len(probe):
                             print(f'Active probe on CH2: {probe}')
-                    dt = dtype([('ch1', int16), ('ch2', int16)])
                     buffer = f.read(data_length * sizeof(c_int16) * 2)
                     if len(buffer) != data_length * sizeof(c_int16) * 2:
                         print('Unexpected end of file')
                         break
+                    # Data interleaved
+                    dt = dtype([('ch1', int16), ('ch2', int16)])
                     data = frombuffer(buffer, dt, data_length)
-                    offset_1 = cast(float, header.ch1.offset)
-                    slope_1 = cast(float, header.ch1.slope) / 1e3
-                    offset_2 = cast(float, header.ch2.offset)
-                    slope_2 = cast(float, header.ch2.slope) / 1e3
-                    y1 = concatenate(
-                        (y1, _linear_calib(data['ch1'], offset_1,
-                                           slope_1), NAN_POINT))
-                    y2 = concatenate(
-                        (y2, _linear_calib(data['ch2'], offset_2,
-                                           slope_2), NAN_POINT))
+                    offset = cast(float, header.ch1.offset)
+                    slope = cast(float, header.ch1.slope) / 1e3
+                    calib = vectorize(lambda raw: slope * (raw + offset))
+                    y1 = concatenate((y1, calib(data['ch1'])))
+                    offset = cast(float, header.ch2.offset)
+                    slope = cast(float, header.ch2.slope) / 1e3
+                    calib = vectorize(lambda raw: slope * (raw + offset))
+                    y2 = concatenate((y2, calib(data['ch2'])))
                     unit = MeasUnit.Volt
                     type = MeasType.Modulated
 
@@ -289,7 +278,7 @@ def _load_signals(
                 slope *= cast(float, header.normalization) / 1e3
                 calib = vectorize(lambda raw: slope * sqrt(raw - noise)
                                   if raw > noise else 0.0)
-                y1 = concatenate((y1, calib(y_raw), NAN_POINT))
+                y1 = concatenate((y1, calib(y_raw)))
                 unit = MeasUnit.Volt
                 type = MeasType.Demodulated
 
@@ -305,12 +294,11 @@ def _load_signals(
             metadata_len = int(footer.metadata_size)
             if metadata_len:
                 f.read(metadata_len)
-            continue
 
         if y2.size > 0:
-            return (x, [y1, y2], unit, type, sampling)
+            return (x, [y1, y2], unit, type, sampling, separators)
         else:
-            return (x, [y1], unit, type, sampling)
+            return (x, [y1], unit, type, sampling, separators)
 
 
 class DaqMeas(Meas):
@@ -325,6 +313,7 @@ class DaqMeas(Meas):
         x: Horizontal coordinates array
         y: List of vertical coordinates arrays
         sampling: Sampling rate
+        separators: List of vertical lines
     """
 
     def __init__(self, file_path: Path, verbose: bool):
@@ -336,8 +325,8 @@ class DaqMeas(Meas):
             verbose: Verbose mode
         """
         super().__init__(file_path)
-        (self.x, self.y, self.y_unit, self.type,
-         self.sampling) = _load_signals(file_path, verbose)
+        (self.x, self.y, self.y_unit, self.type, self.sampling,
+         self.separators) = _load_signals(file_path, verbose)
         if self.sampling == 0:
             self.x_unit = BaseUnit.Dimensionless
 
@@ -363,7 +352,9 @@ class DaqMeas(Meas):
                 f'date=%{{x}}{self.x_unit.get_label()}<br>'
                 f'value=%{{y}}{self.y_unit.get_label()}<extra></extra>')
             count += 1
-        fig.add_hline(y=0)
+        fig.add_hline(0)
+        for sep in self.separators:
+            fig.add_vline(x=sep, line_dash='longdash')
         self._plot(fig, html_file)
 
     def fft(self, html_file: Path) -> None:

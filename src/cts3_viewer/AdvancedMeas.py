@@ -69,7 +69,8 @@ def _load_signal(
                             _Cursor(_Direction.Vertical,
                                     float(match.group(2))))
         except Exception as e:
-            raise Exception(f'Invalid advanced measurements file format ({e})')
+            raise Exception('Unsupported advanced measurements file format '
+                            f'({e})')
         meas_offset = f.tell()
 
     dt = dtype([('x', float64), ('y', float64)])
@@ -126,10 +127,10 @@ class AdvancedMeas(Meas):
                     x=cursor.value,
                     line_dash='dash',
                     annotation_text=f'{cursor.value}{self.x_unit.get_label()}')
-        fig.add_hline(y=0)
+        fig.add_hline(0)
         self._plot(fig, html_file)
 
-    def fft(self, html_file: Path) -> None:
+    def fft(self, _: Path) -> None:
         """
         Performs FFT on advanced measurements and converts it to HTML
 

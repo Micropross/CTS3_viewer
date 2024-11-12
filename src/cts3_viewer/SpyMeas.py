@@ -113,15 +113,15 @@ def _load_signal(
         start_date = cast(int, burst_header.date) / 1e9
         sampling = cast(int, burst_header.sampling) * 1e3
 
-    x = linspace(start_date,
-                 start_date + data_length / sampling,
-                 data_length,
-                 endpoint=True,
-                 dtype=float64)
-    buffer = f.read(data_length * sizeof(c_uint16))
-    if len(buffer) != data_length * sizeof(c_uint16):
-        raise Exception('Invalid analog measurements file format')
-    data = frombuffer(buffer, dtype('>i2'), data_length)
+        x = linspace(start_date,
+                    start_date + data_length / sampling,
+                    data_length,
+                    endpoint=True,
+                    dtype=float64)
+        buffer = f.read(data_length * sizeof(c_uint16))
+        if len(buffer) != data_length * sizeof(c_uint16):
+            raise Exception('Invalid analog measurements file format')
+        data = frombuffer(buffer, dtype('>i2'), data_length)
 
     SOURCE_TXRX = 1
     SOURCE_ANALOG_IN = 2
@@ -199,7 +199,7 @@ class SpyMeas(Meas):
         fig.data[0].hovertemplate = (
             f'date=%{{x}}{self.x_unit.get_label()}<br>'
             f'value=%{{y}}{self.y_unit.get_label()}<extra></extra>')
-        fig.add_hline(y=0)
+        fig.add_hline(0)
         self._plot(fig, html_file)
 
     def fft(self, html_file: Path) -> None:
