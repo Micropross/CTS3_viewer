@@ -17,7 +17,8 @@ authors = [
     { name = "Julien Vannier", email = "julien.m.vannier@gmail.com" }
 ]
 maintainers = [
-    { name = "Guillaume Fouilleul", email = "guillaume.fouilleul@gmail.com" }
+    { name = "Maxence Ciesla", email = "maxence.ciesla@fime.com" },
+    { name = "Franck Hennequin", email = "franck.hennequin@fime.com" }
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
